@@ -2,6 +2,7 @@ package com.msvc.order.order_service.services;
 
 /*import brave.Span;
 import brave.Tracer;*/
+import com.msvc.order.order_service.config.rabbitmq.Producer;
 import com.msvc.order.order_service.dto.InventoryResponse;
 import com.msvc.order.order_service.dto.OrderLineItemsDto;
 import com.msvc.order.order_service.dto.OrderRequest;
@@ -11,6 +12,7 @@ import com.msvc.order.order_service.models.OrderLineItems;
 import com.msvc.order.order_service.repositories.OrderRepository;
 import io.micrometer.tracing.Span;
 import io.micrometer.tracing.Tracer;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -21,7 +23,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
+@Slf4j
 @Service
 @Transactional
 public class OrderService {
@@ -33,6 +35,8 @@ public class OrderService {
     private WebClient.Builder webClientBuilder;
     @Autowired
     private Tracer tracer;
+    @Autowired
+    private Producer producer;
     //@Transactional(readOnly = true)
     //@SneakyThrows
     public String placeOrder(OrderRequest orderRequest){
@@ -70,6 +74,7 @@ public class OrderService {
                 if (allProductsInStock) {
                     orderRepository.save(order);
                     kafkaTemplate.send("notificationTopic", new OrderPlacedEvent(order.getOrderNumber()));
+                    sendMessageWithRabbitMQ("Notification with RabbitMQ, Order save successfully");
                     return "Order save successfully";
                 } else{
                     throw  new IllegalArgumentException("The product is not in stock");
@@ -82,6 +87,11 @@ public class OrderService {
         }
 
 
+    }
+
+    private void sendMessageWithRabbitMQ(String message){
+        log.info("The message '{}' has been received successfully", message);
+        producer.send(message);
     }
 
     private OrderLineItems mapToDto(OrderLineItemsDto orderLineItemsDto){
